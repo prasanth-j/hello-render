@@ -48,4 +48,10 @@ RUN composer install --no-dev --optimize-autoloader
 EXPOSE 80
 
 # Start PHP-FPM and Nginx using supervisor
-CMD ["/bin/sh", "-c", "php artisan config:cache && php-fpm -D && nginx -g 'daemon off;'"]
+CMD ["/bin/sh", "-c", "\
+    php artisan config:cache && \
+    php artisan route:cache && \
+    php artisan view:cache && \
+    php artisan migrate --force && \
+    php-fpm -D && \
+    nginx -g 'daemon off;'"]
