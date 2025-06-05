@@ -1,16 +1,46 @@
-# ---------- Build stage ----------
-FROM composer:2.7 AS build
-WORKDIR /app
-COPY . .
-RUN composer install --no-dev --optimize-autoloader \
- && php artisan key:generate --ansi \
- && php artisan config:cache route:cache view:cache
+FROM php:8.3-fpm-alpine
 
-# ---------- Runtime stage ----------
-FROM nginx:alpine
-# copy app + nginx conf
-COPY --from=build /app /var/www/html
-COPY conf/nginx/app.conf /etc/nginx/conf.d/default.conf
+# Set working directory
 WORKDIR /var/www/html
+
+# Install system dependencies
+RUN apk add --no-cache \
+    nginx \
+    bash \
+    curl \
+    libpng \
+    libjpeg-turbo-dev \
+    libzip-dev \
+    unzip \
+    oniguruma-dev \
+    freetype-dev \
+    icu-dev \
+    libxml2-dev \
+    zlib-dev \
+    libjpeg \
+    git \
+    supervisor
+
+# Install PHP extensions
+RUN docker-php-ext-install pdo pdo_mysql mbstring zip exif pcntl
+
+# Install Composer
+COPY --from=composer:2.7 /usr/bin/composer /usr/bin/composer
+
+# Copy existing application
+COPY . .
+
+# Copy .env file from example
+RUN cp .env.example .env
+
+# Copy Nginx config
+COPY conf/nginx/app.conf /etc/nginx/http.d/default.conf
+
+# Install PHP dependencies
+RUN composer install --no-dev --optimize-autoloader
+
+# Expose port 80
 EXPOSE 80
-CMD ["nginx","-g","daemon off;"]
+
+# Start PHP-FPM and Nginx using supervisor
+CMD ["/bin/sh", "-c", "php artisan config:cache && php-fpm -D && nginx -g 'daemon off;'"]
