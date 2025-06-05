@@ -33,9 +33,10 @@ COPY . .
 # Copy .env file from example
 RUN cp .env.example .env
 
-# Fix permissions for Laravel
-RUN chown -R www-data:www-data storage bootstrap/cache \
- && chmod -R ug+rwx storage bootstrap/cache
+# Create SQLite DB file and set permissions
+RUN touch database/database.sqlite \
+ && chown -R www-data:www-data storage bootstrap/cache database \
+ && chmod -R 775 storage bootstrap/cache database
 
 # Copy Nginx config
 COPY conf/nginx/app.conf /etc/nginx/http.d/default.conf
