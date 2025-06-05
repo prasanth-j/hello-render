@@ -1,3 +1,22 @@
+########################
+# 1. BUILD STAGE
+########################
+FROM composer:2.7 AS build
+
+WORKDIR /app
+
+# Copy only composer files first (for caching)
+COPY composer.json composer.lock ./
+
+# Install optimized vendor packages (no dev)
+RUN composer install --no-dev --optimize-autoloader
+
+# Now copy full Laravel app
+COPY . .
+
+########################
+# 2. RUNTIME STAGE
+########################
 FROM php:8.3-fpm-alpine
 
 # Set working directory
@@ -17,30 +36,37 @@ RUN apk add --no-cache \
     icu-dev \
     libxml2-dev \
     zlib-dev \
-    libjpeg \
     git \
-    supervisor
+    mariadb-connector-c-dev \
+    tzdata
 
 # Install PHP extensions
 RUN docker-php-ext-install pdo pdo_mysql mbstring zip exif pcntl
 
-# Install Composer
-COPY --from=composer:2.7 /usr/bin/composer /usr/bin/composer
+# Copy project files from build stage
+COPY --from=build /app /var/www/html
 
-# Copy existing application
-COPY . .
-
-# Copy .env file from example
+# Copy default .env if none present
 RUN cp .env.example .env
+
+# Fix permissions for Laravel
+RUN chown -R www-data:www-data storage bootstrap/cache \
+ && chmod -R ug+rwx storage bootstrap/cache
 
 # Copy Nginx config
 COPY conf/nginx/app.conf /etc/nginx/http.d/default.conf
 
-# Install PHP dependencies
-RUN composer install --no-dev --optimize-autoloader
-
-# Expose port 80
+# Expose web port
 EXPOSE 80
 
-# Start PHP-FPM and Nginx using supervisor
-CMD ["/bin/sh", "-c", "php artisan config:cache && php-fpm -D && nginx -g 'daemon off;'"]
+# Start services: generate APP_KEY if missing, cache configs, run php-fpm and nginx
+CMD ["/bin/sh", "-c", "\
+    if ! grep -q 'APP_KEY=base64:' .env; then \
+        echo '>>> Generating APP_KEY'; \
+        php artisan key:generate --force; \
+    fi && \
+    php artisan config:cache && \
+    php artisan route:cache && \
+    php artisan view:cache && \
+    php-fpm -D && \
+    nginx -g 'daemon off;'"]
