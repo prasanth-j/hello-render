@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: hello-render
+    env: docker          # tells Render to build the Dockerfile
+    plan: free
+    region: oregon
+    autoDeploy: true
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_KEY      # leave blank; Render will inject at first deploy
+        generateValue: true
